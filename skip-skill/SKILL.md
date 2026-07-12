@@ -13,6 +13,34 @@ Você vai mapear o projeto do usuário para a plataforma **Skip AI Accessibility
 
 O `npx @skip-ai/scanner` NÃO faz extração por regex cega. Ele é apenas o **transportador**: você monta o mapa e ele envia pro Skip Cloud.
 
+## Contrato obrigatório do SAM
+
+É obrigatório executar o scanner com `--generate-sam` para gerar um novo `.skip-sam.json` a partir do projeto atual.
+
+É obrigatório executar `--validate-sam` depois da geração.
+
+Quando o envio estiver habilitado, execute também `--send`.
+
+O arquivo `.skip-sam.json` deve ser gerado no scan atual. Não reutilize um arquivo antigo.
+
+O nome `.skip-sam.json` não deve ser alterado.
+
+Um briefing, uma lista de rotas ou um navigationMap não substituem `.skip-sam.json`.
+
+Não aplique o validador de `.skip-report.json` ao `.skip-sam.json`.
+
+Não declare o scan como concluído enquanto `.skip-sam.json` não tiver sido gerado, validado, enviado e confirmado pela API.
+
+Use um comando equivalente a:
+
+```bash
+npx @skip-ai/scanner scan . \
+  --generate-sam \
+  --validate-sam \
+  --send \
+  --url=<API_URL>
+```
+
 ## Fluxo (siga nesta ordem)
 
 ### Passo 1 — Coletar credenciais (o comando de setup)
@@ -156,23 +184,23 @@ Depois calcule o **score** (0–100) seguindo `references/scoring.md`: começa e
 
 Também gere os **fluxos guiados** (`guidedFlows`): para cada tela com `fill` + `submit`, crie um fluxo (ex.: "Login do usuário" com steps: fill Email → fill Senha → submit Entrar). E o **histórico** (`history`): leia `.skip-history.json` se existir, adicione a entrada atual.
 
-**Antes de enviar, valide o payload** rodando o validador: `node scripts/validate-report.js <arquivo.json>`. Corrija quaisquer erros que ele apontar.
+**Antes de enviar, valide os artefatos** rodando o validador correto por tipo, especialmente `node scripts/validate-artifact.js .skip-sam.json --type=semantic-map`. Não aplique `validate-report.js` ao `.skip-sam.json`.
 
 ### Passo 5 — Enviar pro Skip Cloud
 
-Salve o payload num arquivo temporário (ex.: `.skip-report.json`) e rode o transportador com o `--token` (ou `SKIP_TOKEN` env var) e `--url` obtidos no passo 1:
+Rode o scanner real com `--generate-sam`, `--validate-sam` e, quando houver envio, `--send`, usando o `SKIP_TOKEN` env var e a `--url` obtidos no passo 1:
 
 ```bash
 # Forma com env var (recomendada — não deixa token no histórico do shell):
-SKIP_TOKEN=15a786de-... npx @skip-ai/scanner send --file=.skip-report.json --url=https://ai-accessibility-layer-db-fe7de--preview.goskip.app
+SKIP_TOKEN=15a786de-... npx @skip-ai/scanner scan . --generate-sam --validate-sam --send --url=https://ai-accessibility-layer-db-fe7de--preview.goskip.app
 
 # Ou com flag (equivalente):
-npx @skip-ai/scanner send --file=.skip-report.json --token=15a786de-... --url=https://ai-accessibility-layer-db-fe7de--preview.goskip.app
+npx @skip-ai/scanner scan . --generate-sam --validate-sam --send --token=15a786de-... --url=https://ai-accessibility-layer-db-fe7de--preview.goskip.app
 ```
 
-O scanner máscara o token nos logs (`2ef0...79fb`). Ele fará o POST pra `/api/scanner` e o polling até `COMPLETED`. Se ele retornar erro HTTP 401 → token inválido; 405/404 → a API do Skip Cloud ainda não está configurada (avise o usuário); 413 → payload grande demais.
+O scanner máscara o token nos logs (`2ef0...79fb`). Ele deve gerar `.skip-sam.json`, validar o SAM, gerar os demais artefatos obrigatórios, enviar o bundle e confirmar a API. Se ele retornar erro HTTP 401 → token inválido; 405/404 → a API do Skip Cloud ainda não está configurada (avise o usuário); 413 → payload grande demais.
 
-Após o envio bem-sucedido, **remova o arquivo temporário** (contém o mapa do projeto).
+Após o envio bem-sucedido, confira que `.skip-sam.json` foi criado no scan atual, entrou no manifesto e foi confirmado pela API.
 
 ### Passo 6 — Reportar ao usuário
 
@@ -196,7 +224,7 @@ Mostre um resumo amigável:
 - **`references/wcag-rules.md`** — as 11 regras WCAG (LEIA antes do passo 4.5)
 - **`references/scoring.md`** — como o score é calculado
 - **`references/examples.md`** — exemplos de payloads reais (Next.js, React Router, monorepo)
-- **`scripts/validate-report.js`** — validador de schema, rode antes de enviar
+- **`scripts/validate-artifact.js`** — validador por tipo de artefato; use para `.skip-sam.json`
 
 ## Limitações honestas
 
