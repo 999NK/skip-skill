@@ -122,6 +122,47 @@ Tela Login (/login): input 'Email' (email, name=email); input 'Senha' (password,
 Tela Painel (/dashboard): link 'Configurações' navega para /settings.
 ```
 
+## wcag (auditoria de acessibilidade)
+
+```jsonc
+{
+  "score": 78,                    // 0-100
+  "level": "AA",                  // A | AA | AAA
+  "violations": [{
+    "fingerprint": "abc123def456",// hash estável (ruleId + filePath + selector)
+    "id": "img-alt-login",
+    "ruleId": "img-alt-missing",
+    "rule": "1.1.1 Non-text Content",
+    "level": "A",
+    "severity": "critical",      // critical | serious | moderate | minor | unknown
+    "title": "Imagem sem texto alternativo",
+    "description": "...",
+    "screen": "/login",          // tela da ocorrência primária
+    "filePath": "apps/web/src/pages/Login.tsx",
+    "selector": "img",
+    "fix": "Adicione alt='...'...",
+    "wcagUrl": "https://...",
+    "source": {                  // localização no código (1-based)
+      "filePath": "...",
+      "line": 12,
+      "column": 5
+    },
+    "affectedScreens": ["/login"],  // telas afetadas (deduplicação)
+    "occurrenceCount": 1            // quantas ocorrências consolidadas
+  }],
+  "summary": { "critical": 2, "serious": 5, "moderate": 3, "minor": 0, "unknown": 1 },
+  "checks": { "total": 34, "passed": 20, "failed": 13, "needsReview": 1 },
+  "auditedAt": "2026-07-11T...",
+  "rulesVersion": "1.1.0"
+}
+```
+
+### Severidade `unknown`
+Use `unknown` quando não dá pra confirmar a falha (ex.: contraste sem cálculo real). Violações `unknown` **não** penalizam o score e **não** contam como falha confirmada — vão em `checks.needsReview`.
+
+### Deduplicação
+O mesmo problema no mesmo arquivo+seletor, reaproveitado em várias telas, deve virar **1 violação** com `occurrenceCount` e `affectedScreens` múltiplas — não N violações repetidas.
+
 ## Exemplo completo (mínimo viável)
 
 Veja `examples.md` para payloads reais de Next.js, React Router e monorepo.

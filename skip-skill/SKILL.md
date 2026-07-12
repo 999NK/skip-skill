@@ -1,6 +1,6 @@
 ---
 name: skip
-description: Mapeia o projeto do usuário para a plataforma Skip AI Accessibility Layer — entende a estrutura real do projeto (monorepo, framework, rotas), identifica todas as telas/botões/inputs navegáveis e envia o mapa de navegação para o Skip Cloud. Use SEMPRE que o usuário quiser configurar acessibilidade por voz, mapear telas pro Skip, ou mencionar Skip/Skip AI/"navegação por voz"/"mapear projeto"/"configurar widget de acessibilidade". Mesmo que não diga explicitamente "skip", se a intenção for mapear o app pra acessibilidade ou voz, ative esta skill.
+description: Mapeia o projeto do usuário para a plataforma Skip AI Accessibility Layer — entende a estrutura real do projeto (monorepo, framework, rotas), identifica todas as telas/botões/inputs navegáveis, audita WCAG (11 regras, score 0-100, correções sugeridas) e envia o mapa de navegação + relatório de acessibilidade para o Skip Cloud. Use SEMPRE que o usuário quiser configurar acessibilidade por voz, mapear telas pro Skip, auditar WCAG/acessibilidade, ou mencionar Skip/Skip AI/"navegação por voz"/"mapear projeto"/"configurar widget de acessibilidade"/"auditoria de acessibilidade". Mesmo que não diga explicitamente "skip", se a intenção for mapear o app pra acessibilidade ou voz, ou medir/auditar acessibilidade, ative esta skill.
 ---
 
 # Skip AI — Mapeamento de Navegação
@@ -108,27 +108,81 @@ Monte um JSON seguindo o schema em `references/schema.md` (leia esse arquivo ant
 }
 ```
 
+### Passo 4.5 — Auditar WCAG e calcular score
+
+Enquanto você tem os arquivos das telas em memória (do passo 3), aplique as **11 regras WCAG** descritas em `references/wcag-rules.md` (LEIA antes). Para cada violação encontrada, registre um objeto no bloco `wcag.violations`:
+
+```jsonc
+{
+  "id": "img-alt-login",
+  "rule": "1.1.1 Non-text Content",
+  "level": "A",
+  "severity": "critical",
+  "title": "Imagem sem texto alternativo",
+  "description": "A imagem <img src='/logo.png'> em /login não possui alt.",
+  "screen": "/login",
+  "filePath": "apps/web/src/pages/Login.tsx",
+  "selector": "img",
+  "fix": "Adicione alt='...' descrevendo a imagem, ou alt='' se decorativa.",
+  "wcagUrl": "https://www.w3.org/WAI/WCAG22/quickref/#non-text-content"
+}
+```
+
+Depois calcule o **score** (0–100) seguindo `references/scoring.md`: começa em 100, desconta por severidade (`critical -12, serious -6, moderate -3, minor -1, unknown -0`), floor em 0. Determine o **nível** (A/AA/AAA). Preencha:
+
+```jsonc
+"wcag": {
+  "score": 78,
+  "level": "AA",
+  "violations": [ ... ],
+  "summary": { "critical": 2, "serious": 5, "moderate": 3, "minor": 0, "unknown": 1 },
+  "checks": { "total": 34, "passed": 20, "failed": 13, "needsReview": 1 },
+  "auditedAt": "ISO timestamp",
+  "rulesVersion": "1.1.0"
+}
+```
+
+**Regras críticas para evitar falsos positivos (leia `references/wcag-rules.md`):**
+- **NÃO** acuse input como "sem label" se tiver `<label htmlFor="id">` (React), `<label for="id">` (HTML), `<label>` envolvente (`<label>Email <input/></label>`), ou `aria-label`/`aria-labelledby`.
+- **NÃO** acuse `<Link to="/x">` (React Router) nem `<Link href="/x">` (Next.js) como "link sem href" — ambos são navegação válida.
+- **Ignore** tags dentro de comentários JSX `{/* <Link to>... */}` — não são código real.
+- **`lang` no `<html>`**: cheque UMA vez globalmente (na rota `/` ou layout), não repita por tela de SPA.
+- **Contraste**: se você só vê a classe CSS (`text-gray-300`) sem poder calcular a razão real, marque como **`severity: "unknown"`** (needs-review), **nunca** `minor`. O `unknown` não penaliza o score.
+- **Cada violação** deve ter `source: { filePath, line, column }` (1-based) — conte linhas até o `<` da tag.
+- **Deduplique**: o mesmo problema no mesmo arquivo+seletor, reaproveitado em N telas, vira **1 violação** com `occurrenceCount: N` e `affectedScreens: [...]`, não N violações repetidas.
+- **Checks aprovados**: conte também os elementos que PASSARAM (ex.: 5 imgs, 4 com alt = 4 passed, 1 failed). Preencha `checks: { total, passed, failed, needsReview }`.
+
+**Importante:** não invente violações. Aplique só as regras. Se uma regra não se aplica, não há violação. Seja preciso — falsos positivos minam a confiança no score.
+
+Também gere os **fluxos guiados** (`guidedFlows`): para cada tela com `fill` + `submit`, crie um fluxo (ex.: "Login do usuário" com steps: fill Email → fill Senha → submit Entrar). E o **histórico** (`history`): leia `.skip-history.json` se existir, adicione a entrada atual.
+
 **Antes de enviar, valide o payload** rodando o validador: `node scripts/validate-report.js <arquivo.json>`. Corrija quaisquer erros que ele apontar.
 
 ### Passo 5 — Enviar pro Skip Cloud
 
-Salve o payload num arquivo temporário (ex.: `.skip-report.json`) e rode o transportador com o `--token` e `--url` obtidos no passo 1:
+Salve o payload num arquivo temporário (ex.: `.skip-report.json`) e rode o transportador com o `--token` (ou `SKIP_TOKEN` env var) e `--url` obtidos no passo 1:
 
 ```bash
+# Forma com env var (recomendada — não deixa token no histórico do shell):
+SKIP_TOKEN=15a786de-... npx @skip-ai/scanner send --file=.skip-report.json --url=https://ai-accessibility-layer-db-fe7de--preview.goskip.app
+
+# Ou com flag (equivalente):
 npx @skip-ai/scanner send --file=.skip-report.json --token=15a786de-... --url=https://ai-accessibility-layer-db-fe7de--preview.goskip.app
 ```
 
-O scanner fará o POST pra `/api/scanner` e o polling até `COMPLETED`. Se ele retornar erro HTTP 401 → token inválido; 405/404 → a API do Skip Cloud ainda não está configurada (avise o usuário); 413 → payload grande demais.
+O scanner máscara o token nos logs (`2ef0...79fb`). Ele fará o POST pra `/api/scanner` e o polling até `COMPLETED`. Se ele retornar erro HTTP 401 → token inválido; 405/404 → a API do Skip Cloud ainda não está configurada (avise o usuário); 413 → payload grande demais.
 
 Após o envio bem-sucedido, **remova o arquivo temporário** (contém o mapa do projeto).
 
 ### Passo 6 — Reportar ao usuário
 
 Mostre um resumo amigável:
-- "Mapeei **N telas**, **X botões/links**, **Y inputs**, **Z caminhos de navegação**."
-- Liste as telas encontradas com suas ações principais.
+- **Score WCAG**: "Score de acessibilidade: **78/100 (AA)** — 11 violações (2 critical, 5 serious, 4 moderate)."
+- **Top violações**: liste as critical e serious primeiro, com a tela e a correção sugerida. Ex.: "🔴 `/login`: imagem sem alt → adicione `alt='...'`."
+- "Mapeei **N telas**, **X botões/links**, **Y inputs**, **Z caminhos de navegação**, **F fluxos guiados**."
+- Liste os fluxos guiados detectados (ex.: "Login do usuário", "Salvar em Configurações").
 - Se houver ações com `confidence: "low"`, alerte: "Alguns elementos não têm id/aria-label estável. Pra confiabilidade total do widget, adicione `data-skip-anchor='...'` neles." Liste quais.
-- Diga o próximo passo: "Acesse o dashboard em `{url}/dashboard` pra ver o grafo, ou cole o widget no seu site."
+- Diga o próximo passo: "Acesse o dashboard em `{url}/dashboard` pra ver o grafo, o relatório WCAG completo e a evolução do score, ou cole o widget no seu site."
 
 ## Quando NÃO mapear algo
 
@@ -139,6 +193,8 @@ Mostre um resumo amigável:
 ## Referências
 
 - **`references/schema.md`** — schema completo do payload (LEIA antes de montar o passo 4)
+- **`references/wcag-rules.md`** — as 11 regras WCAG (LEIA antes do passo 4.5)
+- **`references/scoring.md`** — como o score é calculado
 - **`references/examples.md`** — exemplos de payloads reais (Next.js, React Router, monorepo)
 - **`scripts/validate-report.js`** — validador de schema, rode antes de enviar
 

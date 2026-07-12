@@ -96,6 +96,36 @@ function validateReport(report) {
       if (!isNonEmptyString(e.label)) fail(`navigationGraph: aresta ${e.from}->${e.to} sem "label".`);
     }
   }
+
+  // Bloco wcag (opcional, mas se presente é validado)
+  if (report.wcag) {
+    const w = report.wcag;
+    if (typeof w.score !== 'number' || w.score < 0 || w.score > 100) {
+      fail('wcag.score deve ser número 0-100.');
+    }
+    if (!Array.isArray(w.violations)) {
+      warn('wcag.violations não é array.');
+    } else {
+      for (const v of w.violations) {
+        const sev = v.severity;
+        const VALID_SEV = new Set(['critical', 'serious', 'moderate', 'minor', 'unknown']);
+        if (sev && !VALID_SEV.has(sev)) {
+          warn(`wcag violação "${v.id ?? '?'}": severity inválido "${sev}".`);
+        }
+        if (!isNonEmptyString(v.fix)) {
+          warn(`wcag violação "${v.id ?? '?'}": fix vazio (regra do spec: toda violação deve ter sugestão).`);
+        }
+        if (v.source && (typeof v.source.line !== 'number' || v.source.line < 1)) {
+          warn(`wcag violação "${v.id ?? '?'}": source.line inválido.`);
+        }
+      }
+    }
+    if (w.checks && typeof w.checks === 'object') {
+      const c = w.checks;
+      if (typeof c.total !== 'number') warn('wcag.checks.total deve ser número.');
+      if (typeof c.passed !== 'number') warn('wcag.checks.passed deve ser número.');
+    }
+  }
 }
 
 // ---- CLI ----
