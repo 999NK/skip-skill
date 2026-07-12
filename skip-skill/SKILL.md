@@ -72,10 +72,12 @@ Só crie `guidedFlows` quando houver `steps[]` real. Cada fluxo precisa ter `nam
 
 Cada execução cria um diretório exclusivo `.skip-output/<scan-id>/`. Arquivos `.skip-sam.json` antigos na raiz do projeto nunca são resultado do scan atual — não os reutilize.
 
+Versão preferencial neste ambiente: `@skip-ai/scanner@0.9.0`. Como o `0.9.0` foi criado localmente e pode ainda não estar publicado no npm, antes de rodar o scanner verifique se existe o tarball `E:/downloads/hacka/packages/scanner-cli/skip-ai-scanner-0.9.0.tgz`. Se existir, use esse caminho no `npx`. Se não existir, tente `npx @skip-ai/scanner@0.9.0 ...`; se o npm retornar E404, use a versão publicada mais recente apenas como fallback e informe isso no diagnóstico.
+
 Use um comando equivalente a:
 
 ```bash
-npx @skip-ai/scanner scan . \
+npx E:/downloads/hacka/packages/scanner-cli/skip-ai-scanner-0.9.0.tgz scan . \
   --generate-sam \
   --validate-sam \
   --send \
@@ -89,7 +91,7 @@ npx @skip-ai/scanner scan . \
 Antes de mapear, você precisa do **token** e da **URL do Skip Cloud**. O usuário obtém os dois juntos num **comando de setup** que o dashboard gera pronto pra colar — no formato do próprio `npx`, com `--token` e `--url` já preenchidos:
 
 ```
-npx @skip-ai/scanner --token=15a786de-... --url=https://ai-accessibility-layer-db-fe7de--preview.goskip.app
+npx E:/downloads/hacka/packages/scanner-cli/skip-ai-scanner-0.9.0.tgz --token=15a786de-... --url=https://ai-accessibility-layer-db-fe7de--preview.goskip.app
 ```
 
 1. Verifique se existe um arquivo `.skip.json` na raiz do projeto. Se existir e tiver `token` e `url`, use direto — pule pro passo 2.
@@ -122,6 +124,7 @@ npx @skip-ai/scanner --token=15a786de-... --url=https://ai-accessibility-layer-d
    - **Next.js Pages Router**: arquivos em `pages/` ou `src/pages/`
    - **React Router / TanStack Router**: procure o arquivo de definição de rotas (geralmente `routes.tsx`, `App.tsx`, ou `router.tsx`) — leia os `<Route path=...>` ou a definição de `createBrowserRouter`
    - **Remix**: arquivos `route.tsx` em `app/routes/`
+   - **SPA estática HTML/Express**: procure `server.js`, `app.js` ou `index.js` com `express.static(...)`; encontre o `index.html` servido na rota `/`. O scanner `0.9.0` detecta `index.html`, `public/index.html`, `static/index.html` e `src/index.html` como tela `/` e deve gerar entities automaticamente. Endpoints `/api/*` não são telas.
    - **Outro**: pergunte ao usuário onde ficam as páginas
 
 4. Confirme com o usuário sua leitura ANTES de mapear: "Detectei um monorepo pnpm com o frontend em `apps/web`, usando Vite + React Router (rotas definidas em `src/App.tsx`). Vou mapear a partir daí. Confere?" — isso evita mapear o lugar errado.
@@ -233,15 +236,28 @@ Rode o scanner real com `--generate-sam`, `--validate-sam` e, quando houver envi
 
 ```bash
 # Forma com env var (recomendada — não deixa token no histórico do shell):
-SKIP_TOKEN=15a786de-... npx @skip-ai/scanner scan . --generate-sam --validate-sam --send --url=https://ai-accessibility-layer-db-fe7de--preview.goskip.app
+SKIP_TOKEN=15a786de-... npx E:/downloads/hacka/packages/scanner-cli/skip-ai-scanner-0.9.0.tgz scan . --generate-sam --validate-sam --send --url=https://ai-accessibility-layer-db-fe7de--preview.goskip.app
 
 # Ou com flag (equivalente):
-npx @skip-ai/scanner scan . --generate-sam --validate-sam --send --token=15a786de-... --url=https://ai-accessibility-layer-db-fe7de--preview.goskip.app
+npx E:/downloads/hacka/packages/scanner-cli/skip-ai-scanner-0.9.0.tgz scan . --generate-sam --validate-sam --send --token=15a786de-... --url=https://ai-accessibility-layer-db-fe7de--preview.goskip.app
 ```
 
 O scanner máscara o token nos logs (`2ef0...79fb`). Ele deve gerar `.skip-sam.json`, validar o SAM, gerar os demais artefatos obrigatórios, enviar o bundle e confirmar a API. Se ele retornar erro HTTP 401 → token inválido; 405/404 → a API do Skip Cloud ainda não está configurada (avise o usuário); 413 → payload grande demais.
 
 Após o envio bem-sucedido, confira que `.skip-sam.json` foi criado no scan atual, entrou no manifesto e foi confirmado pela API.
+
+#### Fallback para SPA estática/Express
+
+Use somente quando a leitura manual encontrou telas/ações reais, mas o scanner `0.9.0` gerou `.skip-sam.json` sem entities ou encerrou com `entities não pode estar vazio`.
+
+```bash
+node <skill-dir>/scripts/validate-report.js .skip-report.json
+node <skill-dir>/scripts/build-sam-from-report.js .skip-report.json .skip-sam.json
+node <skill-dir>/scripts/validate-artifact.js .skip-sam.json --type=semantic-map
+npx E:/downloads/hacka/packages/scanner-cli/skip-ai-scanner-0.9.0.tgz send --file=.skip-sam.json --type=semantic-map --token=15a786de-... --url=https://ai-accessibility-layer-db-fe7de--preview.goskip.app
+```
+
+Se o fallback for usado, não informe "scanner automático concluiu". Informe "SAM validado e enviado via fallback manual" apenas se o comando `send` confirmar a API. Se o `send` falhar, preserve os artefatos e reporte o bloqueio.
 
 ### Passo 6 — Reportar ao usuário
 
@@ -266,6 +282,7 @@ Mostre um resumo amigável:
 - **`references/scoring.md`** — como o score é calculado
 - **`references/examples.md`** — exemplos de payloads reais (Next.js, React Router, monorepo)
 - **`scripts/validate-artifact.js`** — validador por tipo de artefato; use para `.skip-sam.json`
+- **`scripts/build-sam-from-report.js`** — fallback local para transformar `.skip-report.json` em `.skip-sam.json` quando o scanner `0.9.0` não detecta entities em SPA estática/Express
 
 ## Limitações honestas
 

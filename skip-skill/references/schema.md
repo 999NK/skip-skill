@@ -1,6 +1,8 @@
 # Schema do payload Skip AI
 
-Este é o formato exato que o scanner transporta e o Skip Cloud recebe. Siga-o rigorosamente — o validador (`scripts/validate-report.js`) checa a estrutura antes do envio.
+Este é o formato do relatório de entrada que o agente monta. Siga-o rigorosamente — o validador (`scripts/validate-report.js`) checa a estrutura antes de gerar/enviar artefatos.
+
+Para envio SAM, `.skip-sam.json` deve ser validado com `scripts/validate-artifact.js --type=semantic-map`. Com o scanner local `@skip-ai/scanner@0.9.0` (`E:/downloads/hacka/packages/scanner-cli/skip-ai-scanner-0.9.0.tgz`), SPA estática/Express com `index.html` deve gerar `SCREEN`, `ROUTE` e entidades interativas automaticamente. Use o fallback manual apenas se essa validação ainda falhar.
 
 ## Estrutura raiz
 
