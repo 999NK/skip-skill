@@ -29,7 +29,48 @@ Um briefing, uma lista de rotas ou um navigationMap não substituem `.skip-sam.j
 
 Não aplique o validador de `.skip-report.json` ao `.skip-sam.json`.
 
+Quando a validação falhar, preserve os diagnósticos: `.skip-sam.invalid.json`, `scan-file-manifest.json`, `scan-validation.json`, `scanner-diagnostics.json` e `scanner.log` permanecem em `.skip-output/<scan-id>/`. Não declare sucesso quando o CLI retornar erro (exit code ≠ 0).
+
+Não declare que os artefatos foram enviados sem confirmação individual da API. HTTP 200 genérico não é confirmação suficiente — cada artefato deve aparecer como `received: true`, `valid: true`, `persisted: true` com o `sha256` correspondente.
+
 Não declare o scan como concluído enquanto `.skip-sam.json` não tiver sido gerado, validado, enviado e confirmado pela API.
+
+É obrigatório executar um scan novo e gerar todos os artefatos dentro de `.skip-output/<scan-id>/`.
+
+É obrigatório gerar arquivos completos localmente, sem resumir nem truncar:
+
+- `.skip-report.json`
+- `.skip-sam.json`
+- `.skip-wcag-audit.json`
+- `scan-file-manifest.json`
+- `scan-validation.json`
+- `upload-manifest.json`
+
+Não reutilize artefatos de scans anteriores.
+
+Quando a validação falhar, preserve os diagnósticos, `scanner.log`, `scan-validation.json`, `scan-file-manifest.json` e `.skip-sam.invalid.json`.
+
+Não declare sucesso quando o CLI retornar erro.
+
+Não declare que os artefatos foram enviados sem confirmação individual da API.
+
+O upload é apenas transporte chunked: primeiro gere os arquivos completos, calcule `sha256` e `sizeBytes` de cada arquivo completo, divida cada arquivo em chunks de no máximo 4.5 MB e envie `init -> chunks -> complete`. O backend só deve processar depois do `complete`, quando todos os chunks forem remontados e os hashes finais baterem.
+
+Endpoints esperados:
+
+- `POST /backend/v1/api/scanner/chunks/init`
+- `POST /backend/v1/api/scanner/chunks/:uploadId`
+- `POST /backend/v1/api/scanner/chunks/:uploadId/complete`
+
+Cada chunk deve carregar `scanId`, `artifactId`, `filename`, `chunkIndex`, `totalChunks`, `offset`, `chunkSha256`, `artifactSha256` e `artifactSizeBytes`.
+
+O SAM deve usar relacionamentos reais com `sourceId` e `targetId`, formando o grafo de telas, elementos e navegações. Exemplo: tela Configurações contém botão X, e botão X navega para tela Y.
+
+Chaves i18n como `{menu.organization.name}` devem ser resolvidas por arquivos de tradução ou DOM renderizado. Se não forem resolvidas, marque `unresolvedI18nKey` e não use a chave como nome principal.
+
+Só crie `guidedFlows` quando houver `steps[]` real. Cada fluxo precisa ter `name`, `description` e `steps[]`; cada step precisa ter `screen`, `action`, `label` e opcionalmente `targetEntityId`. Deduplicate fluxos repetidos.
+
+Cada execução cria um diretório exclusivo `.skip-output/<scan-id>/`. Arquivos `.skip-sam.json` antigos na raiz do projeto nunca são resultado do scan atual — não os reutilize.
 
 Use um comando equivalente a:
 
